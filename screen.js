@@ -132,10 +132,23 @@
         arrName.style.cssText = 'font-size:11px;color:#6b7280;';
         bar.appendChild(arrName);
 
+        // Per-panel invert button
+        const invertBtn = document.createElement('button');
+        invertBtn.style.cssText =
+            'margin-left:auto;padding:2px 8px;border-radius:4px;font-size:10px;' +
+            'border:1px solid #333;cursor:pointer;';
+        invertBtn.textContent = 'Invert';
+        const updateInvertStyle = (on) => {
+            invertBtn.style.background = on ? '#4c1d95' : '#1a1a2e';
+            invertBtn.style.color = on ? '#c4b5fd' : '#9ca3af';
+        };
+        updateInvertStyle(false);
+        bar.appendChild(invertBtn);
+
         panelDiv.appendChild(bar);
         container.appendChild(panelDiv);
 
-        return { panelDiv, canvas, bar, select, arrName };
+        return { panelDiv, canvas, bar, select, arrName, invertBtn, updateInvertStyle };
     }
 
     function sizeCanvases() {
@@ -172,6 +185,14 @@
         panel.select.onchange = () => {
             const newIdx = parseInt(panel.select.value);
             switchPanelArrangement(panel, newIdx);
+        };
+
+        // Per-panel invert toggle
+        panel.updateInvertStyle(panel.hw.getInverted());
+        panel.invertBtn.onclick = () => {
+            const on = !panel.hw.getInverted();
+            panel.hw.setInverted(on);
+            panel.updateInvertStyle(on);
         };
 
         // Connect WebSocket
