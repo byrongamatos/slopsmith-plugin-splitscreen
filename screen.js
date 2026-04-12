@@ -156,13 +156,7 @@
         const controls = document.getElementById('player-controls');
         const controlsH = controls ? controls.offsetHeight : 50;
         wrap.style.bottom = controlsH + 'px';
-
-        for (const p of panels) {
-            const rect = p.panelDiv.getBoundingClientRect();
-            const scale = p.hw.getRenderScale();
-            p.canvas.width = Math.round(rect.width * scale);
-            p.canvas.height = Math.round(rect.height * scale);
-        }
+        for (const p of panels) p.hw.resize();
     }
 
     // ── Panel lifecycle ──
@@ -237,9 +231,25 @@
             : getDefaultArrangements(cfg.panels);
 
         for (let i = 0; i < cfg.panels; i++) {
-            const { panelDiv, canvas, bar, select, arrName } = createPanel(i, container, layout);
+            const { panelDiv, canvas, bar, select, arrName, invertBtn, updateInvertStyle } = createPanel(i, container, layout);
             const hw = createHighway();
-            const panel = { hw, canvas, panelDiv, bar, select, arrName, arrIndex: 0 };
+            const panel = { hw, canvas, panelDiv, bar, select, arrName, invertBtn, updateInvertStyle, arrIndex: 0 };
+
+            // Override resize BEFORE init — highway's default sizes to full window,
+            // which clobbers all panels to overlap. Size to parent panel instead.
+            hw.resize = function () {
+                if (!canvas) return;
+                const rect = panelDiv.getBoundingClientRect();
+                const barH = bar.offsetHeight || 28;
+                const w = rect.width;
+                const h = Math.max(0, rect.height - barH);
+                canvas.style.width = w + 'px';
+                canvas.style.height = h + 'px';
+                const scale = hw.getRenderScale();
+                canvas.width = Math.round(w * scale);
+                canvas.height = Math.round(h * scale);
+            };
+
             panels.push(panel);
             initPanel(panel, arrDefaults[i]);
         }
