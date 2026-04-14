@@ -132,23 +132,43 @@
         arrName.style.cssText = 'font-size:11px;color:#6b7280;';
         bar.appendChild(arrName);
 
-        // Per-panel invert button
-        const invertBtn = document.createElement('button');
-        invertBtn.style.cssText =
-            'margin-left:auto;padding:2px 8px;border-radius:4px;font-size:10px;' +
-            'border:1px solid #333;cursor:pointer;';
-        invertBtn.textContent = 'Invert';
-        const updateInvertStyle = (on) => {
-            invertBtn.style.background = on ? '#4c1d95' : '#1a1a2e';
-            invertBtn.style.color = on ? '#c4b5fd' : '#9ca3af';
+        const makeToggleBtn = (label, marginLeft) => {
+            const b = document.createElement('button');
+            b.style.cssText =
+                (marginLeft ? 'margin-left:' + marginLeft + ';' : '') +
+                'padding:2px 8px;border-radius:4px;font-size:10px;' +
+                'border:1px solid #333;cursor:pointer;background:#1a1a2e;color:#9ca3af;';
+            b.textContent = label;
+            return b;
         };
+        const styleToggle = (btn, on, onColor) => {
+            btn.style.background = on ? onColor : '#1a1a2e';
+            btn.style.color = on ? '#fff' : '#9ca3af';
+        };
+
+        const invertBtn = makeToggleBtn('Invert', 'auto');
+        const updateInvertStyle = (on) => styleToggle(invertBtn, on, '#4c1d95');
         updateInvertStyle(false);
         bar.appendChild(invertBtn);
+
+        const lyricsBtn = makeToggleBtn('Lyrics');
+        const updateLyricsStyle = (on) => styleToggle(lyricsBtn, on, '#065f46');
+        bar.appendChild(lyricsBtn);
+
+        const tabBtn = makeToggleBtn('Tab');
+        const updateTabStyle = (on) => styleToggle(tabBtn, on, '#1e40af');
+        updateTabStyle(false);
+        bar.appendChild(tabBtn);
 
         panelDiv.appendChild(bar);
         container.appendChild(panelDiv);
 
-        return { panelDiv, canvas, bar, select, arrName, invertBtn, updateInvertStyle };
+        return {
+            panelDiv, canvas, bar, select, arrName,
+            invertBtn, updateInvertStyle,
+            lyricsBtn, updateLyricsStyle,
+            tabBtn, updateTabStyle,
+        };
     }
 
     function sizeCanvases() {
@@ -189,18 +209,107 @@
             panel.updateInvertStyle(on);
         };
 
+        // Per-panel lyrics toggle (uses highway factory's per-instance showLyrics)
+        const hasLyricsApi = typeof panel.hw.setLyricsVisible === 'function';
+        if (hasLyricsApi) {
+            panel.updateLyricsStyle(panel.hw.getLyricsVisible());
+            panel.lyricsBtn.onclick = () => {
+                const on = !panel.hw.getLyricsVisible();
+                panel.hw.setLyricsVisible(on);
+                panel.updateLyricsStyle(on);
+            };
+        } else {
+            panel.lyricsBtn.disabled = true;
+            panel.lyricsBtn.title = 'Highway lyrics API not available';
+            panel.lyricsBtn.style.opacity = '0.4';
+        }
+
+        // Per-panel Highway/Tab mode toggle (uses tabview factory)
+        const hasTabFactory = typeof window.createTabView === 'function';
+        if (hasTabFactory) {
+            panel.tabBtn.onclick = () => togglePanelTab(panel);
+        } else {
+            panel.tabBtn.disabled = true;
+            panel.tabBtn.title = 'Tab View plugin not loaded';
+            panel.tabBtn.style.opacity = '0.4';
+        }
+
         // Connect WebSocket
         panel.hw.connect(getWsUrl(currentFilename, arrIndex));
+    }
+
+    async function togglePanelTab(panel) {
+        if (panel.tabActive) {
+            // Back to highway
+            if (panel.tabInstance) {
+                try { panel.tabInstance.destroy(); } catch (_) {}
+                panel.tabInstance = null;
+            }
+            if (panel.tabContainer) {
+                panel.tabContainer.remove();
+                panel.tabContainer = null;
+            }
+            panel.canvas.style.display = '';
+            panel.tabActive = false;
+            panel.updateTabStyle(false);
+            return;
+        }
+
+        const prevLabel = panel.tabBtn.textContent;
+        panel.tabBtn.textContent = '…';
+        panel.tabBtn.disabled = true;
+        try {
+            const decoded = decodeURIComponent(currentFilename);
+            const url = '/api/plugins/tabview/gp5/' +
+                encodeURIComponent(decoded) +
+                '?arrangement=' + panel.arrIndex;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(await resp.text());
+            const data = await resp.arrayBuffer();
+
+            const tabContainer = document.createElement('div');
+            tabContainer.style.cssText =
+                'position:absolute;top:0;left:0;right:0;bottom:' +
+                ((panel.bar.offsetHeight || 28) + 'px') +
+                ';overflow:auto;background:#fff;z-index:2;';
+            panel.panelDiv.appendChild(tabContainer);
+
+            const tv = window.createTabView({
+                container: tabContainer,
+                getBeats: () => panel.hw.getBeats(),
+                getCurrentTime: () => document.getElementById('audio').currentTime,
+            });
+            await tv.load(data);
+            tv.startSync();
+
+            panel.canvas.style.display = 'none';
+            panel.tabContainer = tabContainer;
+            panel.tabInstance = tv;
+            panel.tabActive = true;
+            panel.updateTabStyle(true);
+        } catch (e) {
+            console.error('[splitscreen] tab view error:', e);
+            alert('Tab View error: ' + (e.message || e));
+        } finally {
+            panel.tabBtn.textContent = prevLabel;
+            panel.tabBtn.disabled = false;
+        }
     }
 
     function switchPanelArrangement(panel, arrIndex) {
         panel.arrIndex = arrIndex;
         panel.arrName.textContent = arrangements[arrIndex]?.name || '';
+        // If panel was in tab mode, drop out — the loaded GP5 is for the old arrangement.
+        if (panel.tabActive) togglePanelTab(panel);
         panel.hw.reconnect(currentFilename, arrIndex);
     }
 
     function teardownPanels() {
         for (const p of panels) {
+            if (p.tabInstance) {
+                try { p.tabInstance.destroy(); } catch (_) {}
+                p.tabInstance = null;
+            }
             p.hw.stop();
         }
         panels = [];
@@ -231,23 +340,24 @@
             : getDefaultArrangements(cfg.panels);
 
         for (let i = 0; i < cfg.panels; i++) {
-            const { panelDiv, canvas, bar, select, arrName, invertBtn, updateInvertStyle } = createPanel(i, container, layout);
+            const parts = createPanel(i, container, layout);
             const hw = createHighway();
-            const panel = { hw, canvas, panelDiv, bar, select, arrName, invertBtn, updateInvertStyle, arrIndex: 0 };
+            const panel = Object.assign({ hw, arrIndex: 0 }, parts);
 
             // Override resize BEFORE init — highway's default sizes to full window,
             // which clobbers all panels to overlap. Size to parent panel instead.
             hw.resize = function () {
-                if (!canvas) return;
-                const rect = panelDiv.getBoundingClientRect();
-                const barH = bar.offsetHeight || 28;
+                const c = panel.canvas;
+                if (!c) return;
+                const rect = panel.panelDiv.getBoundingClientRect();
+                const barH = panel.bar.offsetHeight || 28;
                 const w = rect.width;
                 const h = Math.max(0, rect.height - barH);
-                canvas.style.width = w + 'px';
-                canvas.style.height = h + 'px';
+                c.style.width = w + 'px';
+                c.style.height = h + 'px';
                 const scale = hw.getRenderScale();
-                canvas.width = Math.round(w * scale);
-                canvas.height = Math.round(h * scale);
+                c.width = Math.round(w * scale);
+                c.height = Math.round(h * scale);
             };
 
             panels.push(panel);
