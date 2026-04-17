@@ -234,8 +234,11 @@
             panel.tabBtn.style.opacity = '0.4';
         }
 
-        // Connect WebSocket
-        panel.hw.connect(getWsUrl(currentFilename, arrIndex));
+        // Connect WebSocket. Pass an empty onSongInfo so core skips its
+        // default writes to shared HUD / audio / arrangement dropdown
+        // — otherwise every panel's song_info clobbers the main view.
+        // See byrongamatos/slopsmith#27.
+        panel.hw.connect(getWsUrl(currentFilename, arrIndex), { onSongInfo: () => {} });
     }
 
     async function togglePanelTab(panel) {
