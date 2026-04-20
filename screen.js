@@ -21,6 +21,7 @@
     let active = false;
     let layout = localStorage.getItem('splitscreenLayout') || 'top-bottom';
     let autoReactivate = localStorage.getItem('splitscreenAutoReactivate') === 'true';
+    let alwaysSplit = localStorage.getItem('splitscreenAlwaysSplit') === 'true';
     let panels = [];       // { hw, canvas, ws, arrIndex, controls }
     let wrap = null;
     let currentFilename = null;
@@ -43,6 +44,15 @@
         autoReactivateCheckbox.addEventListener('change', () => {
             autoReactivate = autoReactivateCheckbox.checked;
             localStorage.setItem('splitscreenAutoReactivate', autoReactivate);
+        });
+    }
+
+    const alwaysSplitCheckbox = document.getElementById('splitscreen-always-split');
+    if (alwaysSplitCheckbox) {
+        alwaysSplitCheckbox.checked = alwaysSplit;
+        alwaysSplitCheckbox.addEventListener('change', () => {
+            alwaysSplit = alwaysSplitCheckbox.checked;
+            localStorage.setItem('splitscreenAlwaysSplit', alwaysSplit);
         });
     }
 
@@ -588,8 +598,7 @@
             if (origOnReady) origOnReady();
             highway._onReady = null;
 
-            // Auto-reactivate split screen with saved prefs
-            if (wasActive && autoReactivate) {
+            if (alwaysSplit || (wasActive && autoReactivate)) {
                 startSplitScreen();
             }
         };
