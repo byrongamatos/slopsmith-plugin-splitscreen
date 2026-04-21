@@ -61,7 +61,9 @@
     // ── Panel preference persistence ──
     function savePanelPrefs() {
         const prefs = panels.map(p => ({
-            arrName: p.jumpingTabMode ? JUMPING_TAB_VALUE : p.lyricsMode ? LYRICS_VALUE : (arrangements[p.arrIndex]?.name || ''),
+            arrName: p.jumpingTabMode
+                ? JUMPING_TAB_VALUE + ':' + (arrangements[p.arrIndex]?.name || '')
+                : p.lyricsMode ? LYRICS_VALUE : (arrangements[p.arrIndex]?.name || ''),
             lyrics: typeof p.hw.getLyricsVisible === 'function' ? p.hw.getLyricsVisible() : true,
             inverted: p.hw.getInverted(),
         }));
@@ -77,7 +79,7 @@
     }
 
     function resolveArrIndex(arrName) {
-        if (!arrName || arrName === LYRICS_VALUE || arrName === JUMPING_TAB_VALUE) return -1;
+        if (!arrName || arrName === LYRICS_VALUE || arrName.startsWith(JUMPING_TAB_VALUE)) return -1;
         const lower = arrName.toLowerCase();
         for (let i = 0; i < arrangements.length; i++) {
             if ((arrangements[i].name || '').toLowerCase() === lower) return i;
@@ -419,11 +421,13 @@
         panel.select.appendChild(lyricsOpt);
 
         if (typeof window.createJumpingTabPane === 'function') {
-            const jtOpt = document.createElement('option');
-            jtOpt.value = JUMPING_TAB_VALUE;
-            jtOpt.textContent = 'Jumping Tab';
-            if (panel.jumpingTabMode) jtOpt.selected = true;
-            panel.select.appendChild(jtOpt);
+            arrangements.forEach((a, i) => {
+                const jtOpt = document.createElement('option');
+                jtOpt.value = JUMPING_TAB_VALUE + ':' + i;
+                jtOpt.textContent = (a.name || `Arr ${i}`) + ' (JT)';
+                if (panel.jumpingTabMode && panel.arrIndex === i) jtOpt.selected = true;
+                panel.select.appendChild(jtOpt);
+            });
         }
     }
 
@@ -496,8 +500,8 @@
         panel.jumpingTabMode = true;
         panel.jumpingTabPane = pane;
         panel.jumpingTabContainer = jtContainer;
-        panel.select.value = JUMPING_TAB_VALUE;
-        panel.arrName.textContent = 'Jumping Tab';
+        panel.select.value = JUMPING_TAB_VALUE + ':' + panel.arrIndex;
+        panel.arrName.textContent = (arrangements[panel.arrIndex]?.name || '') + ' (JT)';
         savePanelPrefs();
     }
 
@@ -529,8 +533,14 @@
 
     function initPanel(panel, arrIndex, prefs) {
         const isLyricsMode = prefs?.arrName === LYRICS_VALUE;
-        const isJumpingTabMode = prefs?.arrName === JUMPING_TAB_VALUE;
-        panel.arrIndex = (isLyricsMode || isJumpingTabMode) ? 0 : arrIndex;
+        const isJumpingTabMode = prefs?.arrName?.startsWith(JUMPING_TAB_VALUE) || false;
+        if (isJumpingTabMode) {
+            const jtArrName = prefs.arrName.slice(JUMPING_TAB_VALUE.length + 1);
+            const jtIdx = resolveArrIndex(jtArrName);
+            panel.arrIndex = jtIdx >= 0 ? jtIdx : arrIndex;
+        } else {
+            panel.arrIndex = isLyricsMode ? 0 : arrIndex;
+        }
         panel.lyricsMode = false;
         panel.lyricsPane = null;
         panel.jumpingTabMode = false;
@@ -554,7 +564,16 @@
 
         panel.select.onchange = () => {
             const val = panel.select.value;
-            if (val === JUMPING_TAB_VALUE) {
+            if (val.startsWith(JUMPING_TAB_VALUE + ':')) {
+                const jtIdx = parseInt(val.split(':')[1]);
+                panel.arrIndex = jtIdx;
+                if (panel.jumpingTabMode) {
+                    panel.jumpingTabPane.destroy();
+                    panel.jumpingTabPane = null;
+                    panel.jumpingTabContainer.remove();
+                    panel.jumpingTabContainer = null;
+                    panel.jumpingTabMode = false;
+                }
                 enterJumpingTabMode(panel);
             } else if (val === LYRICS_VALUE) {
                 enterLyricsMode(panel);
@@ -718,7 +737,9 @@
 
     function captureCurrentPrefs() {
         return panels.map(p => ({
-            arrName: p.jumpingTabMode ? JUMPING_TAB_VALUE : p.lyricsMode ? LYRICS_VALUE : (arrangements[p.arrIndex]?.name || ''),
+            arrName: p.jumpingTabMode
+                ? JUMPING_TAB_VALUE + ':' + (arrangements[p.arrIndex]?.name || '')
+                : p.lyricsMode ? LYRICS_VALUE : (arrangements[p.arrIndex]?.name || ''),
             lyrics: typeof p.hw.getLyricsVisible === 'function' ? p.hw.getLyricsVisible() : true,
             inverted: p.hw.getInverted(),
         }));
@@ -748,8 +769,12 @@
             arrDefaults = [];
             for (let i = 0; i < cfg.panels; i++) {
                 const pref = savedPrefs[i % savedPrefs.length];
-                if (pref && (pref.arrName === LYRICS_VALUE || pref.arrName === JUMPING_TAB_VALUE)) {
+                if (pref && pref.arrName === LYRICS_VALUE) {
                     arrDefaults.push(0);
+                } else if (pref && pref.arrName?.startsWith(JUMPING_TAB_VALUE)) {
+                    const jtArrName = pref.arrName.slice(JUMPING_TAB_VALUE.length + 1);
+                    const jtIdx = resolveArrIndex(jtArrName);
+                    arrDefaults.push(jtIdx >= 0 ? jtIdx : 0);
                 } else {
                     const idx = pref ? resolveArrIndex(pref.arrName) : -1;
                     arrDefaults.push(idx >= 0 ? idx : getDefaultArrangements(1)[0]);
