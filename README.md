@@ -7,6 +7,7 @@ A plugin for [Slopsmith](https://github.com/byrongamatos/slopsmith) that shows 2
 - **Three layouts** — Top/Bottom (2P), Left/Right (2P), and Quad (4P, 2×2 grid)
 - **Per-panel arrangement selector** — each panel has its own dropdown; swap what it renders mid-playback without restarting the song
 - **Per-panel invert toggle** — flip individual panels between player and audience perspective independently
+- **Per-panel note detection** — each panel can independently detect notes from a specific audio input channel; pairs with the [Note Detect](https://github.com/byrongamatos/slopsmith-plugin-notedetect) plugin for multi-guitar setups
 - **Smart defaults** — opens with lead → rhythm → bass auto-assigned across panels when those arrangements exist, wrapping to fill the rest
 - **Single shared audio** — all panels slave to the core `<audio>` element, so there's only one sound source and no drift between views
 - **Live layout switching** — change layout from the player toolbar without reloading the song; existing arrangement selections are preserved when panel counts match
@@ -31,6 +32,37 @@ Split screen works with both PSARC and `.sloppak` songs — any song with more t
 ## Settings
 
 Open **Settings → Split Screen** to pick the default layout (Top/Bottom, Left/Right, or Quad). The choice is stored in `localStorage` as `splitscreenLayout` and applies the next time you toggle split screen on.
+
+## Note Detection
+
+Each panel can independently detect the notes you're playing and score your accuracy in real time. This requires the [Note Detect plugin](https://github.com/byrongamatos/slopsmith-plugin-notedetect) to be installed.
+
+### Single input
+
+Click **Detect** on any panel to enable note detection for that panel. The note detect HUD appears as an overlay and tracks your hits, misses, and streak independently from any other panels.
+
+### Multiple inputs (e.g. Focusrite Scarlett)
+
+If your audio interface has more than one input — for example a Scarlett 2i2 with two guitars — you can route each input to its own panel:
+
+1. Plug guitar 1 into **input 1** (left channel) and guitar 2 into **input 2** (right channel).
+2. In the first panel, click the channel button until it shows **L**.
+3. In the second panel, click the channel button until it shows **R**.
+4. Click **Detect** on both panels.
+
+Each panel now listens to its own input and detects notes independently. Both players get their own accuracy HUD.
+
+The channel button cycles through three modes:
+
+| Label | Channel |
+|-------|---------|
+| **M** | Mono mix (both inputs combined) |
+| **L** | Left channel only (input 1) |
+| **R** | Right channel only (input 2) |
+
+Your channel assignment is saved per panel and restored on the next visit. Detect is not re-enabled automatically on page load — you need to click it each session to trigger the microphone permission prompt.
+
+> If note_detect is not installed the Detect and channel buttons are visible but disabled.
 
 ## How it works
 
