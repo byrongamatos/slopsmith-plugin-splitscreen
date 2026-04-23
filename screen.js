@@ -254,10 +254,11 @@
         // Per-panel master-difficulty (slopsmith#48 PR 3). The highway
         // factory's _mastery closure is per-instance, so setMastery on
         // one panel doesn't leak to the others. We deliberately don't
-        // subscribe to window.slopsmith.emit('song:ready', ...) here —
-        // that bus emits per highway but the event payload reflects
-        // only the highway that fired, so panels listening to it would
-        // see each other's ready events. The per-instance _onReady
+        // listen to the global `song:ready` event here (which would
+        // mean calling window.slopsmith.on('song:ready', handler)):
+        // every panel emits on the same bus, so a handler on one panel
+        // would also fire for the others' ready events with their
+        // hasPhraseData in the payload. The per-instance _onReady
         // callback slot is the right mechanism.
         const hasMasteryApi =
             typeof panel.hw.setMastery === 'function' &&
