@@ -160,6 +160,22 @@
         updateTabStyle(false);
         bar.appendChild(tabBtn);
 
+        // Per-panel master-difficulty slider (slopsmith#48 PR 3).
+        // Volatile — resets to 100 each splitscreen session to avoid
+        // stale state across layout changes (quad → 2-panel etc.).
+        // Compact: no text label, `title` tooltip carries the current
+        // value. Keeps the panel bar usable in quad layout.
+        const difficultySlider = document.createElement('input');
+        difficultySlider.type = 'range';
+        difficultySlider.min = '0';
+        difficultySlider.max = '100';
+        difficultySlider.value = '100';
+        difficultySlider.step = '5';
+        difficultySlider.style.cssText = 'width:60px;accent-color:#4080e0;cursor:pointer;';
+        difficultySlider.title = 'Difficulty: 100%';
+        difficultySlider.setAttribute('aria-label', `Panel ${index + 1} difficulty`);
+        bar.appendChild(difficultySlider);
+
         panelDiv.appendChild(bar);
         container.appendChild(panelDiv);
 
@@ -168,6 +184,7 @@
             invertBtn, updateInvertStyle,
             lyricsBtn, updateLyricsStyle,
             tabBtn, updateTabStyle,
+            difficultySlider,
         };
     }
 
@@ -232,6 +249,53 @@
             panel.tabBtn.disabled = true;
             panel.tabBtn.title = 'Tab View plugin not loaded';
             panel.tabBtn.style.opacity = '0.4';
+        }
+
+        // Per-panel master-difficulty (slopsmith#48 PR 3). The highway
+        // factory's _mastery closure is per-instance, so setMastery on
+        // one panel doesn't leak to the others. We deliberately don't
+        // subscribe to window.slopsmith.emit('song:ready', ...) here —
+        // that bus emits per highway but the event payload reflects
+        // only the highway that fired, so panels listening to it would
+        // see each other's ready events. The per-instance _onReady
+        // callback slot is the right mechanism.
+        const hasMasteryApi =
+            typeof panel.hw.setMastery === 'function' &&
+            typeof panel.hw.hasPhraseData === 'function';
+        if (hasMasteryApi) {
+            const applyMasteryAvailability = () => {
+                const has = panel.hw.hasPhraseData();
+                panel.difficultySlider.disabled = !has;
+                panel.difficultySlider.title = has
+                    ? `Difficulty: ${panel.difficultySlider.value}%`
+                    : 'Source chart has a single difficulty level — slider disabled';
+            };
+            panel.difficultySlider.oninput = () => {
+                // parseInt + finite guard + clamp (pre-review lesson:
+                // defensive numeric handling on any user/plugin input)
+                const parsed = parseInt(panel.difficultySlider.value, 10);
+                if (!Number.isFinite(parsed)) return;
+                const pct = Math.max(0, Math.min(100, parsed));
+                panel.hw.setMastery(pct / 100);
+                // Only refresh the tooltip's value when phrase data is
+                // available; otherwise leave the "disabled" explanation.
+                if (panel.hw.hasPhraseData()) {
+                    panel.difficultySlider.title = `Difficulty: ${pct}%`;
+                }
+            };
+            // Set _onReady BEFORE connect so the hook is guaranteed to
+            // be installed when the WebSocket's 'ready' message lands.
+            // Preserve any existing _onReady (none expected today, but
+            // future composition should chain rather than clobber).
+            const prevOnReady = panel.hw._onReady;
+            panel.hw._onReady = () => {
+                if (prevOnReady) prevOnReady();
+                applyMasteryAvailability();
+            };
+        } else {
+            panel.difficultySlider.disabled = true;
+            panel.difficultySlider.title = 'Master-difficulty requires slopsmith ≥ #48 PR 2';
+            panel.difficultySlider.style.opacity = '0.4';
         }
 
         // Connect WebSocket
