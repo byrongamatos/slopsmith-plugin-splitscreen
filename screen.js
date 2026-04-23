@@ -270,6 +270,20 @@
                     ? `Difficulty: ${panel.difficultySlider.value}%`
                     : 'Source chart has a single difficulty level — slider disabled';
             };
+            const syncMasteryFromSlider = () => {
+                // Push the slider's UI value into the highway on each
+                // ready so the two can't drift. Without this, if core's
+                // default _mastery ever changes (or a future plugin
+                // adjusts it pre-ready), the slider would show 100%
+                // while the panel rendered filtered. Redundant-but-safe
+                // on a fresh session (both sides already at 100%), and
+                // correctly no-ops on arrangement switches where PR 2's
+                // reconnect preserves _mastery at whatever the user
+                // previously dragged to.
+                const parsed = parseInt(panel.difficultySlider.value, 10);
+                if (!Number.isFinite(parsed)) return;
+                panel.hw.setMastery(Math.max(0, Math.min(100, parsed)) / 100);
+            };
             panel.difficultySlider.oninput = () => {
                 // parseInt + finite guard + clamp (pre-review lesson:
                 // defensive numeric handling on any user/plugin input)
@@ -290,11 +304,13 @@
             const prevOnReady = panel.hw._onReady;
             panel.hw._onReady = () => {
                 if (prevOnReady) prevOnReady();
+                syncMasteryFromSlider();
                 applyMasteryAvailability();
             };
         } else {
             panel.difficultySlider.disabled = true;
-            panel.difficultySlider.title = 'Master-difficulty requires slopsmith ≥ #48 PR 2';
+            panel.difficultySlider.title =
+                'Master-difficulty requires a slopsmith core with setMastery / hasPhraseData support';
             panel.difficultySlider.style.opacity = '0.4';
         }
 
