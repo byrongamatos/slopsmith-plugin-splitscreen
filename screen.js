@@ -317,7 +317,7 @@
     function createPanel(index, container, layoutKey) {
         const panelDiv = document.createElement('div');
         panelDiv.className = 'splitscreen-panel';
-        panelDiv.style.cssText = 'position:relative;overflow:hidden;';
+        panelDiv.style.cssText = 'position:relative;overflow:hidden;box-sizing:border-box;border:1px solid #333;';
 
         if (layoutKey === 'quad') {
             panelDiv.style.width = '50%';
