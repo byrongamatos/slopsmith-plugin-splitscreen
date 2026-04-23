@@ -74,6 +74,9 @@
                 ? (p.hw3dPane ? p.hw3dPane.getInverted() : p.hw3dInverted)
                 : p.hw.getInverted(),
             detectChannel: p.detectChannel || 'mono',
+            hw3dViewMode: p.hw3dMode
+                ? (p.hw3dPane && typeof p.hw3dPane.getViewMode === 'function' ? p.hw3dPane.getViewMode() : p.hw3dViewMode)
+                : p.hw3dViewMode,
         }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     }
@@ -396,6 +399,11 @@
         channelBtn.title = 'Audio channel: Mono / Left / Right';
         bar.appendChild(channelBtn);
 
+        const viewBtn = makeToggleBtn('CLS');
+        viewBtn.title = 'Cycle 3D view style';
+        viewBtn.style.display = 'none';
+        bar.appendChild(viewBtn);
+
         panelDiv.appendChild(bar);
         container.appendChild(panelDiv);
 
@@ -405,7 +413,7 @@
             lyricsBtn, updateLyricsStyle,
             tabBtn, updateTabStyle,
             detectBtn, updateDetectStyle,
-            channelBtn,
+            channelBtn, viewBtn,
         };
     }
 
@@ -582,8 +590,11 @@
             ';overflow:hidden;background:#08080e;z-index:2;';
         panel.panelDiv.appendChild(paneContainer);
 
-        // hw3dInverted initialised in initPanel; preserve across arrangement switches.
+        // hw3dInverted and hw3dViewMode initialised in initPanel; preserve across arrangement switches.
         const pane = window.create3DHwPane({ container: paneContainer, inverted: panel.hw3dInverted });
+        if (typeof pane.setViewMode === 'function' && panel.hw3dViewMode) {
+            pane.setViewMode(panel.hw3dViewMode);
+        }
         pane.connect(currentFilename, panel.arrIndex);
         panel.hw3dMode = true;
         panel.hw3dPane = pane;
@@ -595,6 +606,24 @@
             panel.hw3dPane.setInverted(newVal);
             panel.hw3dInverted = newVal;
             panel.updateInvertStyle(newVal);
+            savePanelPrefs();
+        };
+
+        // View cycle button
+        const _updateViewBtn = () => {
+            const vid = panel.hw3dPane.getViewMode?.();
+            panel.viewBtn.textContent = vid === 'perspective' ? 'Persp' : 'CLS';
+            panel.viewBtn.style.background = vid === 'perspective' ? '#1e3a5f' : '#1a1a2e';
+            panel.viewBtn.style.color      = vid === 'perspective' ? '#fff'    : '#9ca3af';
+        };
+        _updateViewBtn();
+        panel.viewBtn.style.display = '';
+        panel.viewBtn.onclick = () => {
+            if (!panel.hw3dPane) return;
+            const current = panel.hw3dPane.getViewMode();
+            pane.setViewMode(current === 'classic' ? 'perspective' : 'classic');
+            panel.hw3dViewMode = panel.hw3dPane.getViewMode();
+            _updateViewBtn();
             savePanelPrefs();
         };
 
@@ -620,6 +649,7 @@
         panel.canvas.style.display = '';
         panel.lyricsBtn.style.display = '';
         panel.tabBtn.style.display = '';
+        panel.viewBtn.style.display = 'none';
         panel.hw3dMode = false;
 
         panel.hw.init(panel.canvas);
@@ -663,8 +693,9 @@
         panel.hw3dMode = false;
         panel.hw3dPane = null;
         panel.hw3dContainer = null;
-        // Persist invert across arrangement switches within 3D pane mode.
-        panel.hw3dInverted = is3DMode ? (prefs?.inverted ?? false) : false;
+        // Persist invert and view mode across arrangement switches within 3D pane mode.
+        panel.hw3dInverted  = is3DMode ? (prefs?.inverted     ?? false)     : false;
+        panel.hw3dViewMode  = is3DMode ? (prefs?.hw3dViewMode || 'classic') : 'classic';
 
         panel.hw.init(panel.canvas);
 
@@ -937,6 +968,9 @@
                 ? (p.hw3dPane ? p.hw3dPane.getInverted() : p.hw3dInverted)
                 : p.hw.getInverted(),
             detectChannel: p.detectChannel || 'mono',
+            hw3dViewMode: p.hw3dMode
+                ? (p.hw3dPane && typeof p.hw3dPane.getViewMode === 'function' ? p.hw3dPane.getViewMode() : p.hw3dViewMode)
+                : p.hw3dViewMode,
         }));
     }
 
