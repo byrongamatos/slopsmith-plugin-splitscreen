@@ -70,6 +70,20 @@
         return _vizPluginsPromise;
     }
 
+    // Shared lookup: canvas element → panel record (or null when
+    // splitscreen is inactive / the canvas isn't one of ours).
+    // panelChromeFor / settingsAnchorFor / panelIndexFor all route
+    // through this so the active-check + iterate-panels logic lives
+    // in one place — future changes to the panel/canvas mapping
+    // (e.g. WeakMap cache, id lookup) only update this function.
+    function _panelForCanvas(canvasEl) {
+        if (!active || !canvasEl) return null;
+        for (const p of panels) {
+            if (p.canvas === canvasEl) return p;
+        }
+        return null;
+    }
+
     function setFocusedPanel(index) {
         if (!active) return;
         if (_focusedPanelIndex === index) return;
@@ -845,11 +859,8 @@
         // container — `#player-controls` is the main-player anchor
         // and doesn't exist per-panel.
         panelChromeFor: (canvasEl) => {
-            if (!active || !canvasEl) return null;
-            for (const p of panels) {
-                if (p.canvas === canvasEl) return p.panelDiv;
-            }
-            return null;
+            const p = _panelForCanvas(canvasEl);
+            return p ? p.panelDiv : null;
         },
 
         // A specific element inside the panel's chrome that plugins
@@ -857,11 +868,41 @@
         // this is the panel's bottom control bar; callers should
         // insertBefore / appendChild as appropriate.
         settingsAnchorFor: (canvasEl) => {
-            if (!active || !canvasEl) return null;
-            for (const p of panels) {
-                if (p.canvas === canvasEl) return p.bar;
-            }
-            return null;
+            const p = _panelForCanvas(canvasEl);
+            return p ? p.bar : null;
+        },
+
+        // Numeric panel index (0-based) of the panel hosting the
+        // given canvas, or null when splitscreen is inactive / the
+        // canvas isn't one of ours.
+        //
+        // For "is this canvas the currently-focused one?" prefer
+        // `isCanvasFocused(canvas)` below rather than comparing
+        // `panelIndexFor(canvas) === focusedPanelId()` — both can
+        // return null when splitscreen is inactive, and the raw
+        // equality check would then evaluate true for ANY canvas.
+        // panelIndexFor is still useful for plugin-side bookkeeping
+        // (labels, per-panel storage keys, etc.) where the index
+        // itself is what matters.
+        panelIndexFor: (canvasEl) => {
+            const p = _panelForCanvas(canvasEl);
+            return p ? p._index : null;
+        },
+
+        // Non-ambiguous focus check. Returns true ONLY when
+        // splitscreen is active AND the canvas belongs to a managed
+        // panel AND that panel is currently focused. Main-player
+        // single-instance callers should use
+        // `!slopsmithSplitscreen?.isActive() || slopsmithSplitscreen.isCanvasFocused(canvas)`
+        // when they want "focused in splitscreen OR always-focused
+        // in main-player-fast-path." This helper deliberately does
+        // NOT treat inactive splitscreen as focused, so consumers
+        // that only want the strict splitscreen semantics get a
+        // clean boolean.
+        isCanvasFocused: (canvasEl) => {
+            if (!active) return false;
+            const p = _panelForCanvas(canvasEl);
+            return !!p && p._index === _focusedPanelIndex;
         },
 
         // Imperative focus control — useful from a plugin's settings
