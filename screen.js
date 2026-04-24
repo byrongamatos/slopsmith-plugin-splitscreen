@@ -866,10 +866,25 @@
 
         // Numeric panel index (0-based) of the panel hosting the
         // given canvas, or null when splitscreen is inactive / the
-        // canvas isn't one of ours. Complements focusedPanelId() —
-        // plugins compare `panelIndexFor(myCanvas) === focusedPanelId()`
-        // to answer "am I the focused instance?" without needing a
-        // separate boolean API for that common case.
+        // canvas isn't one of ours.
+        //
+        // Use with focusedPanelId() to answer "am I the focused
+        // instance?" — but gate on isActive() first, otherwise the
+        // raw `panelIndexFor(canvas) === focusedPanelId()` check
+        // evaluates true when splitscreen is inactive (both sides
+        // return null) regardless of which canvas is passed. The
+        // idiomatic pattern is:
+        //
+        //   const active = window.slopsmithSplitscreen?.isActive();
+        //   const iAmFocused = !active ||
+        //     slopsmithSplitscreen.panelIndexFor(myCanvas) ===
+        //     slopsmithSplitscreen.focusedPanelId();
+        //
+        // Read as: "focused if either splitscreen is off (main
+        // player, single instance, always focused) OR if MY panel
+        // is the currently-focused one." That keeps the single-
+        // instance main-player fast path correct while enabling
+        // focus-driven routing under splitscreen.
         panelIndexFor: (canvasEl) => {
             if (!active || !canvasEl) return null;
             for (const p of panels) {
