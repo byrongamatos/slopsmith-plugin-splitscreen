@@ -371,7 +371,6 @@
             const id = panel.vizSelect.value;
             if (id === 'default' || !id) {
                 panel.hw.setRenderer(null);
-                panel._installedVizId = null;
                 return;
             }
             const factory = window['slopsmithViz_' + id];
@@ -382,7 +381,6 @@
                 );
                 panel.vizSelect.value = 'default';
                 panel.hw.setRenderer(null);
-                panel._installedVizId = null;
                 return;
             }
             let renderer;
@@ -391,7 +389,6 @@
                 console.error(`[splitscreen] viz picker: factory slopsmithViz_${id} threw:`, e);
                 panel.vizSelect.value = 'default';
                 panel.hw.setRenderer(null);
-                panel._installedVizId = null;
                 return;
             }
             if (!renderer || typeof renderer.draw !== 'function') {
@@ -400,10 +397,8 @@
                 );
                 panel.vizSelect.value = 'default';
                 panel.hw.setRenderer(null);
-                panel._installedVizId = null;
                 return;
             }
-            panel._installedVizId = id;
             panel.hw.setRenderer(renderer);
         };
 
@@ -624,7 +619,7 @@
         for (let i = 0; i < cfg.panels; i++) {
             const parts = createPanel(i, container, layout);
             const hw = createHighway();
-            const panel = Object.assign({ hw, arrIndex: 0, _index: i, _installedVizId: null }, parts);
+            const panel = Object.assign({ hw, arrIndex: 0, _index: i }, parts);
 
             // Override resize BEFORE init — highway's default sizes to full window,
             // which clobbers all panels to overlap. Size to parent panel instead.
@@ -808,10 +803,15 @@
     // own panel's chrome for injecting per-instance UI (gear buttons,
     // settings strips, etc.).
     //
-    // Absence of this object means "main-player, single-instance,
-    // always focused" — plugins should fast-path their module-scope
-    // single-instance behaviour in that case. Wave B plugins today
-    // don't consult this surface at all; Wave C plugin PRs opt in.
+    // Gate on `isActive()` rather than presence — this object is
+    // registered unconditionally once the plugin script loads, even
+    // while splitscreen is toggled off. Plugins that subscribe to
+    // onFocusChange and check isActive() at handler time get the
+    // right behaviour; plugins that only existence-check would
+    // unnecessarily disable their single-instance main-player
+    // fast path just because the splitscreen plugin is installed.
+    // Wave B plugins today don't consult this surface at all;
+    // Wave C plugin PRs opt in.
     window.slopsmithSplitscreen = {
         // True while the splitscreen overlay is visible.
         isActive: () => active,
@@ -859,11 +859,17 @@
         // Imperative focus control — useful from a plugin's settings
         // UI where the user chose to route MIDI to a specific panel
         // via a dropdown rather than a click. Idempotent.
+        // Range comparisons fall through silently for non-numerics
+        // (NaN comparisons always yield false), so coerce to a
+        // Number and require an integer before the range check to
+        // reject `<select>` string values that failed to parse,
+        // floating-point inputs, and arbitrary plugin-provided junk.
         setFocusedPanelId: (index) => {
             if (!active) return;
-            if (index == null) return;
-            if (index < 0 || index >= panels.length) return;
-            setFocusedPanel(index);
+            const panelIndex = Number(index);
+            if (!Number.isInteger(panelIndex)) return;
+            if (panelIndex < 0 || panelIndex >= panels.length) return;
+            setFocusedPanel(panelIndex);
         },
     };
 })();
