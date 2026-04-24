@@ -575,7 +575,16 @@
         // chance to detach from the panel they were routing to
         // while its DOM still exists. newPanelId: null signals "no
         // panel is focused anymore — unhook your singleton inputs".
+        //
+        // Clear _focusedPanelIndex BEFORE dispatching so the public
+        // focusedPanelId() getter returns null during the handler
+        // call, matching detail.newPanelId. Otherwise a consumer
+        // that reads focusedPanelId() inside its focus-change
+        // handler would see the OLD focused index while the event
+        // payload claims the focus moved to null — an observable
+        // inconsistency.
         const previous = _focusedPanelIndex;
+        _focusedPanelIndex = null;
         if (previous !== null) {
             _focusBus.dispatchEvent(new CustomEvent('focus-change', {
                 detail: { newPanelId: null, previousPanelId: previous },
@@ -593,7 +602,6 @@
             wrap.remove();
             wrap = null;
         }
-        _focusedPanelIndex = null;
     }
 
     // ── Main toggle ──
