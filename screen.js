@@ -876,29 +876,33 @@
         // given canvas, or null when splitscreen is inactive / the
         // canvas isn't one of ours.
         //
-        // Use with focusedPanelId() to answer "am I the focused
-        // instance?" — but the raw
-        // `panelIndexFor(canvas) === focusedPanelId()` check alone
-        // evaluates true when splitscreen is inactive (both sides
-        // return null) regardless of which canvas is passed. Two
-        // safe patterns:
-        //
-        //   1. Explicitly gate on isActive() and only compare when
-        //      splitscreen is active — use when a plugin wants
-        //      distinct inactive-vs-focused paths.
-        //
-        //   2. Compact idiom that intentionally treats inactive
-        //      splitscreen as "always focused" (main-player fast
-        //      path, single instance). Preferred when the caller's
-        //      behaviour should be identical in both cases:
-        //
-        //        const active = window.slopsmithSplitscreen?.isActive();
-        //        const iAmFocused = !active ||
-        //          slopsmithSplitscreen.panelIndexFor(myCanvas) ===
-        //          slopsmithSplitscreen.focusedPanelId();
+        // For "is this canvas the currently-focused one?" prefer
+        // `isCanvasFocused(canvas)` below rather than comparing
+        // `panelIndexFor(canvas) === focusedPanelId()` — both can
+        // return null when splitscreen is inactive, and the raw
+        // equality check would then evaluate true for ANY canvas.
+        // panelIndexFor is still useful for plugin-side bookkeeping
+        // (labels, per-panel storage keys, etc.) where the index
+        // itself is what matters.
         panelIndexFor: (canvasEl) => {
             const p = _panelForCanvas(canvasEl);
             return p ? p._index : null;
+        },
+
+        // Non-ambiguous focus check. Returns true ONLY when
+        // splitscreen is active AND the canvas belongs to a managed
+        // panel AND that panel is currently focused. Main-player
+        // single-instance callers should use
+        // `!slopsmithSplitscreen?.isActive() || slopsmithSplitscreen.isCanvasFocused(canvas)`
+        // when they want "focused in splitscreen OR always-focused
+        // in main-player-fast-path." This helper deliberately does
+        // NOT treat inactive splitscreen as focused, so consumers
+        // that only want the strict splitscreen semantics get a
+        // clean boolean.
+        isCanvasFocused: (canvasEl) => {
+            if (!active) return false;
+            const p = _panelForCanvas(canvasEl);
+            return !!p && p._index === _focusedPanelIndex;
         },
 
         // Imperative focus control — useful from a plugin's settings
