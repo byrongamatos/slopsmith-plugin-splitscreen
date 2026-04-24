@@ -864,6 +864,20 @@
             return null;
         },
 
+        // Numeric panel index (0-based) of the panel hosting the
+        // given canvas, or null when splitscreen is inactive / the
+        // canvas isn't one of ours. Complements focusedPanelId() —
+        // plugins compare `panelIndexFor(myCanvas) === focusedPanelId()`
+        // to answer "am I the focused instance?" without needing a
+        // separate boolean API for that common case.
+        panelIndexFor: (canvasEl) => {
+            if (!active || !canvasEl) return null;
+            for (const p of panels) {
+                if (p.canvas === canvasEl) return p._index;
+            }
+            return null;
+        },
+
         // Imperative focus control — useful from a plugin's settings
         // UI where the user chose to route MIDI to a specific panel
         // via a dropdown rather than a click. Idempotent.
