@@ -70,6 +70,20 @@
         return _vizPluginsPromise;
     }
 
+    // Shared lookup: canvas element → panel record (or null when
+    // splitscreen is inactive / the canvas isn't one of ours).
+    // panelChromeFor / settingsAnchorFor / panelIndexFor all route
+    // through this so the active-check + iterate-panels logic lives
+    // in one place — future changes to the panel/canvas mapping
+    // (e.g. WeakMap cache, id lookup) only update this function.
+    function _panelForCanvas(canvasEl) {
+        if (!active || !canvasEl) return null;
+        for (const p of panels) {
+            if (p.canvas === canvasEl) return p;
+        }
+        return null;
+    }
+
     function setFocusedPanel(index) {
         if (!active) return;
         if (_focusedPanelIndex === index) return;
@@ -845,11 +859,8 @@
         // container — `#player-controls` is the main-player anchor
         // and doesn't exist per-panel.
         panelChromeFor: (canvasEl) => {
-            if (!active || !canvasEl) return null;
-            for (const p of panels) {
-                if (p.canvas === canvasEl) return p.panelDiv;
-            }
-            return null;
+            const p = _panelForCanvas(canvasEl);
+            return p ? p.panelDiv : null;
         },
 
         // A specific element inside the panel's chrome that plugins
@@ -857,11 +868,8 @@
         // this is the panel's bottom control bar; callers should
         // insertBefore / appendChild as appropriate.
         settingsAnchorFor: (canvasEl) => {
-            if (!active || !canvasEl) return null;
-            for (const p of panels) {
-                if (p.canvas === canvasEl) return p.bar;
-            }
-            return null;
+            const p = _panelForCanvas(canvasEl);
+            return p ? p.bar : null;
         },
 
         // Numeric panel index (0-based) of the panel hosting the
@@ -869,28 +877,28 @@
         // canvas isn't one of ours.
         //
         // Use with focusedPanelId() to answer "am I the focused
-        // instance?" — but gate on isActive() first, otherwise the
-        // raw `panelIndexFor(canvas) === focusedPanelId()` check
+        // instance?" — but the raw
+        // `panelIndexFor(canvas) === focusedPanelId()` check alone
         // evaluates true when splitscreen is inactive (both sides
-        // return null) regardless of which canvas is passed. The
-        // idiomatic pattern is:
+        // return null) regardless of which canvas is passed. Two
+        // safe patterns:
         //
-        //   const active = window.slopsmithSplitscreen?.isActive();
-        //   const iAmFocused = !active ||
-        //     slopsmithSplitscreen.panelIndexFor(myCanvas) ===
-        //     slopsmithSplitscreen.focusedPanelId();
+        //   1. Explicitly gate on isActive() and only compare when
+        //      splitscreen is active — use when a plugin wants
+        //      distinct inactive-vs-focused paths.
         //
-        // Read as: "focused if either splitscreen is off (main
-        // player, single instance, always focused) OR if MY panel
-        // is the currently-focused one." That keeps the single-
-        // instance main-player fast path correct while enabling
-        // focus-driven routing under splitscreen.
+        //   2. Compact idiom that intentionally treats inactive
+        //      splitscreen as "always focused" (main-player fast
+        //      path, single instance). Preferred when the caller's
+        //      behaviour should be identical in both cases:
+        //
+        //        const active = window.slopsmithSplitscreen?.isActive();
+        //        const iAmFocused = !active ||
+        //          slopsmithSplitscreen.panelIndexFor(myCanvas) ===
+        //          slopsmithSplitscreen.focusedPanelId();
         panelIndexFor: (canvasEl) => {
-            if (!active || !canvasEl) return null;
-            for (const p of panels) {
-                if (p.canvas === canvasEl) return p._index;
-            }
-            return null;
+            const p = _panelForCanvas(canvasEl);
+            return p ? p._index : null;
         },
 
         // Imperative focus control — useful from a plugin's settings
