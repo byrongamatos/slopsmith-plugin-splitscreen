@@ -528,7 +528,11 @@
         panel.panelDiv.appendChild(jtContainer);
 
         const pane = window.createJumpingTabPane({ container: jtContainer });
-        pane.connect(currentFilename, panel.arrIndex);
+        if (currentFilename) {
+            pane.connect(currentFilename, panel.arrIndex).catch(e => {
+                console.warn('[splitscreen] jumping tab connect failed:', e.message);
+            });
+        }
         panel.jumpingTabMode = true;
         panel.jumpingTabPane = pane;
         panel.jumpingTabContainer = jtContainer;
