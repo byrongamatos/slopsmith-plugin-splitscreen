@@ -269,10 +269,13 @@
         const updateLyricsStyle = (on) => styleToggle(lyricsBtn, on, '#065f46');
         bar.appendChild(lyricsBtn);
 
-        const tabBtn = makeToggleBtn('Tab');
-        const updateTabStyle = (on) => styleToggle(tabBtn, on, '#1e40af');
-        updateTabStyle(false);
-        bar.appendChild(tabBtn);
+        // The legacy "Tab" toggle button (and the window.createTabView
+        // pane contract it called into) was removed after tabview's
+        // Wave B migration (slopsmith#36, slopsmith-plugin-tabview#8):
+        // tabview is now a setRenderer-contract visualization
+        // selectable via the per-panel viz picker (vizSelect dropdown
+        // above), so a separate Tab toggle is redundant. Users pick
+        // "Tab View" from the dropdown to swap a panel's renderer.
 
         // Per-panel master-difficulty slider (slopsmith#48 PR 3).
         // Volatile — resets to 100 each splitscreen session to avoid
@@ -308,7 +311,6 @@
             vizSelect, focusPill,
             invertBtn, updateInvertStyle,
             lyricsBtn, updateLyricsStyle,
-            tabBtn, updateTabStyle,
             difficultySlider,
         };
     }
@@ -439,16 +441,6 @@
             panel.lyricsBtn.style.opacity = '0.4';
         }
 
-        // Per-panel Highway/Tab mode toggle (uses tabview factory)
-        const hasTabFactory = typeof window.createTabView === 'function';
-        if (hasTabFactory) {
-            panel.tabBtn.onclick = () => togglePanelTab(panel);
-        } else {
-            panel.tabBtn.disabled = true;
-            panel.tabBtn.title = 'Tab View plugin not loaded';
-            panel.tabBtn.style.opacity = '0.4';
-        }
-
         // Per-panel master-difficulty (slopsmith#48 PR 3). The highway
         // factory's _mastery closure is per-instance, so setMastery on
         // one panel doesn't leak to the others. We deliberately don't
@@ -517,69 +509,9 @@
         panel.hw.connect(getWsUrl(currentFilename, arrIndex));
     }
 
-    async function togglePanelTab(panel) {
-        if (panel.tabActive) {
-            // Back to highway
-            if (panel.tabInstance) {
-                try { panel.tabInstance.destroy(); } catch (_) {}
-                panel.tabInstance = null;
-            }
-            if (panel.tabContainer) {
-                panel.tabContainer.remove();
-                panel.tabContainer = null;
-            }
-            panel.canvas.style.display = '';
-            panel.tabActive = false;
-            panel.updateTabStyle(false);
-            return;
-        }
-
-        const prevLabel = panel.tabBtn.textContent;
-        panel.tabBtn.textContent = '…';
-        panel.tabBtn.disabled = true;
-        try {
-            const decoded = decodeURIComponent(currentFilename);
-            const url = '/api/plugins/tabview/gp5/' +
-                encodeURIComponent(decoded) +
-                '?arrangement=' + panel.arrIndex;
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(await resp.text());
-            const data = await resp.arrayBuffer();
-
-            const tabContainer = document.createElement('div');
-            tabContainer.style.cssText =
-                'position:absolute;top:0;left:0;right:0;bottom:' +
-                ((panel.bar.offsetHeight || 28) + 'px') +
-                ';overflow:auto;background:#fff;z-index:2;';
-            panel.panelDiv.appendChild(tabContainer);
-
-            const tv = window.createTabView({
-                container: tabContainer,
-                getBeats: () => panel.hw.getBeats(),
-                getCurrentTime: () => document.getElementById('audio').currentTime,
-            });
-            await tv.load(data);
-            tv.startSync();
-
-            panel.canvas.style.display = 'none';
-            panel.tabContainer = tabContainer;
-            panel.tabInstance = tv;
-            panel.tabActive = true;
-            panel.updateTabStyle(true);
-        } catch (e) {
-            console.error('[splitscreen] tab view error:', e);
-            alert('Tab View error: ' + (e.message || e));
-        } finally {
-            panel.tabBtn.textContent = prevLabel;
-            panel.tabBtn.disabled = false;
-        }
-    }
-
     function switchPanelArrangement(panel, arrIndex) {
         panel.arrIndex = arrIndex;
         panel.arrName.textContent = arrangements[arrIndex]?.name || '';
-        // If panel was in tab mode, drop out — the loaded GP5 is for the old arrangement.
-        if (panel.tabActive) togglePanelTab(panel);
         panel.hw.reconnect(currentFilename, arrIndex);
     }
 
@@ -605,10 +537,6 @@
             }));
         }
         for (const p of panels) {
-            if (p.tabInstance) {
-                try { p.tabInstance.destroy(); } catch (_) {}
-                p.tabInstance = null;
-            }
             p.hw.stop();
         }
         panels = [];
