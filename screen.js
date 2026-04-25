@@ -1037,7 +1037,7 @@
             if (!audio || !active) return;
             const t = audio.currentTime;
             for (const p of panels) {
-                if (!p.lyricsMode && !p.jumpingTabMode && !p.hw3dMode) p.hw.setTime(t);
+                if (!p.lyricsMode && !p.jumpingTabMode) p.hw.setTime(t);
             }
         }, 1000 / 60);
     }
