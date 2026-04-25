@@ -269,13 +269,13 @@
         const updateLyricsStyle = (on) => styleToggle(lyricsBtn, on, '#065f46');
         bar.appendChild(lyricsBtn);
 
-        // The legacy "Tab" toggle button + window.createTabView pane
-        // contract were dropped after tabview's Wave C migration
-        // (slopsmith#36): tabview is now a setRenderer-contract
-        // visualization selectable via the per-panel viz picker
-        // (vizSelect dropdown above), so a separate Tab toggle is
-        // redundant. Users pick "Tab View" from the dropdown to
-        // swap a panel's renderer.
+        // The legacy "Tab" toggle button (and the window.createTabView
+        // pane contract it called into) was removed after tabview's
+        // Wave B migration (slopsmith#36, slopsmith-plugin-tabview#8):
+        // tabview is now a setRenderer-contract visualization
+        // selectable via the per-panel viz picker (vizSelect dropdown
+        // above), so a separate Tab toggle is redundant. Users pick
+        // "Tab View" from the dropdown to swap a panel's renderer.
 
         // Per-panel master-difficulty slider (slopsmith#48 PR 3).
         // Volatile — resets to 100 each splitscreen session to avoid
